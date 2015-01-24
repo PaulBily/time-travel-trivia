@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Time Travel Trivia</title>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+<script type="text/javascript">
+    $(function() {
+
+    var conn;
+    var answ = $('#answers');
+    var quest = $('#question');
+
+    var endm = $('#endingMusic')[0];
+    var titlem = $('#titleMusic')[0];
+    var mainm = $('#mainMusic')[0];
+    var rights = $('#rightSound')[0];
+    var wrongs = $('#wrongSound')[0];
+
+    var time = 0;
+    var timeId = null;
+
+    var curMusic = "title";
+
+    var countdown = function(){
+        time--;
+        $('#timer').text(time);
+        if(time > 0){
+            timeId = setTimeout(countdown, 1000);
+        }
+    }
+
+    var submitAnswer = function(e) {
+        window.thething = e;
+        console.log(e);
+        console.log(e.target.innerText);
+        if (!conn) {
+            return false;
+        }
+        conn.send(e.target.innerText);
+        return false;
+    };
+
+    $('#start').click(function() {
+        if (!conn) {
+            return false;
+        }
+        conn.send("start");
+        return false;
+    });
+
+    if (window["WebSocket"]) {
+        conn = new WebSocket("ws://{{$}}/ws");
+
+        conn.onclose = function(evt) {
+            $('body').replaceWith("<div>You have been disconnected.</div>");
+        }
+        conn.onmessage = function(evt) {
+            var result = JSON.parse(evt.data);
+            console.log(result);
+
+            $('.players').text(result.Players);
+            $('.round').text(result.Round);
+            
+            if(result.Timer > 0){
+                if(time>0 && timeId){
+                    clearTimeout(timeId);
+                }
+                time = result.Timer;
+                $('#timer').text(time);
+                timeId = setTimeout(countdown, 1000);
+            }
+
+            if(result.Round === 0) {
+                // At start of game
+                $('body').removeClass("end game").addClass("title");
+                if(curMusic !== "title"){
+                    endm.pause();
+                    titlem.play();
+                    curMusic = "title";
+                }
+            } else if(result.Answers.length == 0) {
+                if(result.Question === 'Game over'){
+                    $('body').removeClass("title game").addClass("end");
+                    mainm.pause();
+                    endm.play();
+                    curMusic = "end";
+                } else {
+                    quest.text(result.Question);
+                    answ.empty();
+                }
+            } else {
+                if(result.Timer == 30){
+                    // New question
+                    quest.text(result.Question);
+                    answ.empty()
+                    for(var i = 0, n = result.Answers.length; i<n; i++){
+                        $("<button>" + result.Answers[i] + "</button>").appendTo(answ).click(submitAnswer);
+                    }
+                    if(curMusic = "title"){
+                        titlem.pause();
+                        mainm.play();
+                        curMusic = "main";
+                    }
+                } else {
+                    // Between questions
+                    answ.empty().append("<div>The correct answer was '" + result.Answers[0] + "'</div><div>" + result.Question + "</div>");
+                    var sound = result.Question.search(/Sorry/) !== -1 ? wrongs : rights;
+                    sound.currentTime = 0;
+                    sound.play();
+                }
+                $('body').removeClass("title end").addClass("game");
+            }
+
+        }
+    } else {
+        $('body').replaceWith("<div>Your browser does not support WebSockets.</div>");
+    }
+    });
+</script>
+
+<style type="text/css">
+
+body > div{
+    display: none;
+}
+
+body.title > div.title{
+    display: inline;
+}
+
+body.game > div.game{
+    display: inline;
+}
+
+body.end > div.end{
+    display: inline;
+}
+
+</style>
+</head>
+<body class="title">
+<div class="title">
+    <h1>Time Travel Trivia</h1>
+    <p>You and your buddies are out on a free, experimental, Ride The Ducks Tour. You’re the first lucky group to beta test the new hot tub + water ride through Philadelphia tour! After a plunge into the water, the boat warps you and your friend(s) into a TIMEWARP! Benjamin Franklin riding a dinosaur greets you!</p>
+    <p>As one of the founding Father’s, and the Keeper of Time and Space, Old Ben declares that you and your buddies must answer a number of MATH, SCIENCE, HISTORY, and ART questions before you go back home.</p>
+    <p>Each one of you has the questions in front of you, but only ONE of you has the correct answer! Communicate, work together, and solve each of Old Ben’s questions and you can get back to the City of Brotherly Love for a taste of Gino’s Cheesesteaks before dinner.</p>
+    <div>Players: <span class="players">0</span></div>
+    <button id="start">Start Game</button>
+</div>
+<div class="game">
+    <h3>Round <span class="round"></span></h3>
+    <div>Players: <span class="players">0</span></div>
+    <div>Time: <span id="timer">0</span></div>
+    <div id="question"></div>
+    <div id="answers"></div>
+</div>
+<div class="end">
+    <h2>You made it to round <span class="round"></span>!</h2>
+    <p>Dope job man, now you’re stuck in time with Old Ben. Well, at least you’re not in New Jersey. Wanna try again?</p>
+</div>
+<audio id="mainMusic" loop="true" src="/audio/MainGameplayTrack.mp3"></audio>
+<audio id="titleMusic" loop="true" src="/audio/TitleTrack.mp3" autoplay></audio>
+<audio id="endingMusic" loop="true" src="/audio/EndingTrack.mp3"></audio>
+<audio id="rightSound" src="/audio/RightAnswer.mp3"></audio>
+<audio id="wrongSound" src="/audio/WrongAnswer.mp3"></audio>
+</body>
+</html>
